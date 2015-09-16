@@ -792,8 +792,7 @@ public class LockService extends Service implements View.OnClickListener,
         setTheme(R.style.LockActivityTheme);
         View root = (View) li.inflate(R.layout.layout_alias_locker, null);
         mContainer = (RelativeLayout) root.findViewById(R.id.lock_container);
-        mViewBackground = (ImageView) root
-                .findViewById(R.id.lock_iv_background);
+        mViewBackground = (ImageView) root.findViewById(R.id.lock_iv_background);
         root.setOnKeyListener(this);
         root.setFocusable(true);
         root.setFocusableInTouchMode(true);

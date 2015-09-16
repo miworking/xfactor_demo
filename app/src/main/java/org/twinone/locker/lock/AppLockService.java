@@ -536,6 +536,8 @@ public class AppLockService extends Service {
         }
         app_score = 100;
 
+
+
         // pickup result
         int pickup_score = pickup_result == PickupResult.OWER ? 100 : 0;
         Log.d(TAG,"pickup_score = " + pickup_score);
@@ -559,10 +561,10 @@ public class AppLockService extends Service {
 
 
 
-        //data collection
-        DataCollection d=new DataCollection(this);
-        String androidId = Settings.Secure.getString(getContentResolver(),Settings.Secure.ANDROID_ID);
-        d.collectData(curWifi,wifi_score,intGps,blueToothStatus,onBodyStatus,xFactor,app_cate,app_score,androidId,getTopPackageName(),WifiService.confirmWifi);
+//        //data collection
+//        DataCollection d=new DataCollection(this);
+//        String androidId = Settings.Secure.getString(getContentResolver(),Settings.Secure.ANDROID_ID);
+//        d.collectData(curWifi,wifi_score,intGps,blueToothStatus,onBodyStatus,xFactor,app_cate,app_score,androidId,getTopPackageName(),WifiService.confirmWifi);
 
 
 
