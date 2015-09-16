@@ -17,6 +17,8 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.hardware.Sensor;
+import android.hardware.SensorManager;
 import android.net.wifi.WifiManager;
 import android.os.Binder;
 import android.os.Build;
@@ -59,30 +61,41 @@ public class AppLockService extends Service {
     private HashMap<String,Integer> wifiTable;
     private HashMap<Integer,Integer> gpsTable;
     private HashMap<String,Integer> test_appTable;
-    private HashMap<String,Integer> cateTable;
-    private HashMap<String,String> appTable;
+
+    public static int diff=0;
+    public static HashMap<String,Integer> cateTable = new HashMap<String,Integer>();
+    public static String lastOpenedApp="";
+    public static HashMap<String,String> appTable;
     public static HashSet<String> appSet;
 
-    /**
-     * Recieve pickup recognition result
-     */
-    private PickupResult pickup_result = PickupResult.OTHER;
 
-    private enum PickupResult {
+    private SensorManager mSensorManager;
+    private Sensor mAccelerometer;
+    private ShakeDetector mShakeDetector;
+    private static Map<String, Boolean> wasCategoryChanged;
+
+
+
+
+
+    private static PickupResult pickup_result = PickupResult.OTHER;
+
+    private static enum PickupResult {
         OWER, OTHER
     }
 
-    public class PickupReceiver extends BroadcastReceiver{
+    public static class PickupReceiver extends BroadcastReceiver{
 
         @Override
         public void onReceive(Context context, Intent intent) {
             String result = intent.getStringExtra("pickup");
             if (result.equals("owner")) {
                 pickup_result = PickupResult.OWER;
+                // Toast.makeText(getApplicationContext(),"recognized as owner",Toast.LENGTH_SHORT).show();
             }
             else {
                 pickup_result = PickupResult.OTHER;
-
+                //Toast.makeText(getApplicationContext(),"recognized as others",Toast.LENGTH_SHORT).show();
             }
         }
     };
@@ -102,7 +115,7 @@ public class AppLockService extends Service {
             fis = openFileInput("category.txt");
             ObjectInputStream is = new ObjectInputStream(fis);
             CategoryTable simpleClass = (CategoryTable) is.readObject();
-           // String s = "";
+            // String s = "";
 
 
             for (Map.Entry entry : simpleClass.table.entrySet()) {
@@ -120,13 +133,6 @@ public class AppLockService extends Service {
 
 
     }
-    private void updateCate(){
-        try{
-            readFile(appTable);
-        }catch(IOException e){
-            Log.d("test", "read error");
-        }
-    }
 
 
     private void initHashMap(){
@@ -138,27 +144,37 @@ public class AppLockService extends Service {
         gpsTable = new HashMap<Integer,Integer>();
         test_appTable = new HashMap<String,Integer>();
         appTable = new HashMap<String,String>();
-        cateTable = new HashMap<String,Integer>();
         appSet = new HashSet<String>();
 
 
-
+/*
         try{
             readFile(appTable);
         }catch(IOException e){
             Log.d("test", "read error");
-        }
+        }*/
+        appTable.put("com.google.android.gm","Communication");
+        appTable.put("com.google.android.apps.walletnfcrel", "Finance");
+        appTable.put("com.google.android.music", "Music & Audio");
+        appTable.put("com.google.android.music", "Music & Audio");
+        appTable.put("com.google.android.apps.photos","Productivity");
+        appTable.put("com.motorola.MotGallery2","Photography");
+
+
         //values_of_list=l.toArray(new String[l.size()]);
         Log.d("test", "" + appTable.size());
 
         String[] parts = readFromFile("wifiTable").split(",");
-        String work =parts[0];
-        String home = parts[1];
+        //String work =parts[0];
+        String work="\"CMU-SECURE\"";
+        String home = "\"HOME\"" ;
         wifiTable.put(work,40);
         wifiTable.put(home,50);
 
         gpsTable.put(0,9);
         gpsTable.put(1,6);
+        //gpsTable.put(2,3);
+        //changed for the purpose of the demo of ppt
         gpsTable.put(2,3);
 
         test_appTable.put("com.android.chrome", 9);
@@ -173,19 +189,16 @@ public class AppLockService extends Service {
         cateTable.put("Productivity", 40);
         cateTable.put("Business", 35);
         cateTable.put("Shopping", 30);
-        cateTable.put("Photography", 30);
+        cateTable.put("Photography", 40);
         cateTable.put("Transportation", 30);
-        cateTable.put("Photography", 30);
         cateTable.put("Health & Fitness", 30);
         cateTable.put("Music & Audio", 25);
+        cateTable.put("Increased",100);
+        cateTable.put("Shake",0);
+
+
         cateTable.put("Libraries & Demo", 25);
         cateTable.put("News & Magazines", 25);
-        cateTable.put("Not Ready", 45);
-        cateTable.put("Started", 45);
-
-
-
-
 
 
 
@@ -215,7 +228,7 @@ public class AppLockService extends Service {
 
     private static final int REQUEST_CODE = 0x1234AF;
     public static final int NOTIFICATION_ID = 0xABCD32;
-    private static final String TAG = "++++++";
+    private static final String TAG = "AppLockService";
 
     /**
      * Use this action to stop the intent
@@ -252,7 +265,6 @@ public class AppLockService extends Service {
     private Handler mHandler;
     private BroadcastReceiver mScreenReceiver;
 
-    private PickupReceiver mPickupReciever;
     /**
      * This map contains locked apps in the form<br>
      * <PackageName, ShortExitEndTime>
@@ -347,23 +359,78 @@ public class AppLockService extends Service {
 
     @Override
     public void onCreate() {
+        //start the shake detection feature
+
+        initHashMap();
+
+
+
         Log.d(TAG, "onCreateHaha"+mBound);
 
 //        Intent i =new Intent(this,List_CAtegoriy.class);
 //        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 //       this.startActivity(i);
 
-        initHashMap();
-
-        mPickupReciever = new PickupReceiver();
-        IntentFilter pickupFilter = new IntentFilter();
-        pickupFilter.addAction("org.twinone.locker.pickup.result");
-        registerReceiver(mPickupReciever,pickupFilter);
-
 
         Intent intent = new Intent(this, BluetoothService.class);
-       if (!mBound) bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
+        if (!mBound) bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
+
         super.onCreate();
+        //this.startService(new Intent(this, ShakeDetectionService.class));
+
+
+        //shake detection part
+        mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        mAccelerometer = mSensorManager
+                .getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        mShakeDetector = new ShakeDetector();
+        wasCategoryChanged =new HashMap<String, Boolean>();
+        mShakeDetector.setOnShakeListener(new ShakeDetector.OnShakeListener() {
+
+            @Override
+            public void onShake(int count) {
+				/*
+				 * The following method, "handleShakeEvent(count):" is a stub //
+				 * method you would use to setup whatever you want done once the
+				 * device has been shook.
+				 */
+
+                if (count > 1) {
+
+
+                    showLocker(null);
+                    Log.d("lastopenedapp",""+AppLockService.lastOpenedApp);
+
+                    if(AppLockService.lastOpenedApp.equals("com.google.android.apps.photos")) {
+                       /* if(AppLockService.diff<0)
+                            Toast.makeText(AppLockService.this, "Security Decreased", Toast.LENGTH_LONG).show();
+                        else
+                            Toast.makeText(AppLockService.this, "Security Increased", Toast.LENGTH_LONG).show();
+*/
+
+                        //upgrade the category from low -> high
+                        Log.d("CAtegory score changed", "CAtegory score changed" + 100);
+                        String openedApp = AppLockService.lastOpenedApp;
+
+                        if(AppLockService.appTable.get(openedApp).equals("Photography")){
+                            AppLockService.appTable.put(openedApp,"Increased");
+                            Toast.makeText(AppLockService.this, "Security Increased", Toast.LENGTH_LONG).show();
+                        }
+                        else {
+                            AppLockService.appTable.put(openedApp, "Photography");
+                            Toast.makeText(AppLockService.this, "Security Decreased", Toast.LENGTH_LONG).show();
+                        }
+                    }
+                }
+            }
+        });
+
+        mSensorManager.registerListener(mShakeDetector, mAccelerometer, SensorManager.SENSOR_DELAY_UI);
+
+
+
+
+
 
 
     }
@@ -488,18 +555,16 @@ public class AppLockService extends Service {
     }
 
     private void onLockedAppOpen(final String open) {
+
+        this.lastOpenedApp=open;
+
         //list_category.validate();
         //if package.size = file.map.size do nothing
         //else start t to undate file( size is not right and no file is there
         // when finish set UPDATING to false
-        try{
-            readFile(appTable);
-        }catch(IOException e){
-            Log.d("test", "read error");
-        }
+       /* ListCategory l=new ListCategory(this);
+        l.validate();*/
 
-        ListCategory l=new ListCategory(this);
-        l.validate();
 
 
         onbody b=new onbody(this);
@@ -517,42 +582,39 @@ public class AppLockService extends Service {
         if (wifiTable.containsKey(curWifi)) wifi_score = wifiTable.get(curWifi);
 
         int intGps=LocationData.getInstance().getStatus();
-
         String locationStatus = ""+intGps;
-
         int gps_score = 0;
         if (gpsTable.containsKey(intGps)) gps_score = gpsTable.get(intGps);
         Log.v("Abhishek Score",Integer.toString(gps_score));
 
         String blueToothStatus = ""+bt;
         int bt_score = bt? 28:0;
+
+        String pickingUpStatus = "N/A";
         String app_cate = "N/A";
-        int app_score=30;
+        int app_score=20;
         if (appTable.containsKey(open)) {
             app_cate = appTable.get(open);
 
             if ( cateTable.containsKey(app_cate)) app_score = cateTable.get(app_cate);
-            else app_score = 20;
         }
-        app_score = 100;
 
-
-
-        // pickup result
+        //pick up score if recognised or not
         int pickup_score = pickup_result == PickupResult.OWER ? 100 : 0;
-        Log.d(TAG,"pickup_score = " + pickup_score);
+        Log.d(TAG,"Pickup score = " + pickup_score);
 
-        xFactor = body_score + wifi_score + bt_score + gps_score + pickup_score;
-       for (String s : wifiTable.keySet()) {
 
-       }
+        xFactor = body_score + wifi_score + bt_score + gps_score+pickup_score;
+        for (String s : wifiTable.keySet()) {
+
+        }
 
         //String cate = readFromFile("category.txt");
         //Log.v ("cate+", l.get);
         if( List_CAtegoriy.UPDATING = true )
             Log.d("factors", List_CAtegoriy.UPDATEINFO);
 
-        Log.v(TAG, "app: " + open + "\n" + "wifi: " + curWifi + wifiTable.keySet() + " " + wifi_score + "\n"
+        Log.v("factors", "app: " + open + "\n" + "wifi: " + curWifi + wifiTable.keySet() + " " + wifi_score + "\n"
                 + "location: " + locationStatus + "\n"
                 + "bluetooth: " + blueToothStatus + "\n"
                 + "onbody: " + onBodyStatus + "\n"
@@ -560,22 +622,14 @@ public class AppLockService extends Service {
                 + "appScore: " + app_cate + " " + app_score);
 
 
+/*
 
-//        //data collection
-//        DataCollection d=new DataCollection(this);
-//        String androidId = Settings.Secure.getString(getContentResolver(),Settings.Secure.ANDROID_ID);
-//        d.collectData(curWifi,wifi_score,intGps,blueToothStatus,onBodyStatus,xFactor,app_cate,app_score,androidId,getTopPackageName(),WifiService.confirmWifi);
+        //data collection
+        DataCollection d=new DataCollection(this);
+        String androidId = Settings.Secure.getString(getContentResolver(),Settings.Secure.ANDROID_ID);
+        d.collectData(curWifi,wifi_score,intGps,blueToothStatus,onBodyStatus,xFactor,app_cate,app_score,androidId,getTopPackageName(),WifiService.confirmWifi);
 
-
-
-
-
-
-
-
-
-
-
+*/
 
 
 //        //fetch wifi
@@ -585,10 +639,13 @@ public class AppLockService extends Service {
         //WifiService. .updateList();
         //Toast.makeText(this, "curWIFI IS : "+curWifi+" antd workWIFI is: "+readFromFile("wifiTable").split(",")[0]+" bol: "+ locked+" app: "+open, Toast.LENGTH_SHORT).show();
 
-       // Toast.makeText(this, "Location is :  "+LocationData.getInstance().getStatus(), Toast.LENGTH_SHORT).show();
+        // Toast.makeText(this, "Location is :  "+LocationData.getInstance().getStatus(), Toast.LENGTH_SHORT).show();
         //final boolean locked = mLockedPackages.get(open);
         // Log.d(TAG, "onLockedAppOpen (locked=" + locked + ")");
 
+        //Toast.makeText(this, "Pick up:"+this.pickup_result, Toast.LENGTH_SHORT).show();
+
+        diff=app_score-xFactor;
         if (xFactor<app_score) {
             showLocker(open);
         }
@@ -867,13 +924,9 @@ public class AppLockService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        if (mPickupReciever != null) {
-            unregisterReceiver(mPickupReciever);
-        }
-
         Log.d(TAG, "onDestroy: (mAllowRestart=" + mAllowRestart + ")" + "mbound: " + mBound);
         if (mBound){ this.unbindService( mConnection);
-                    }
+        }
 
 
         if (mScreenReceiver != null)
