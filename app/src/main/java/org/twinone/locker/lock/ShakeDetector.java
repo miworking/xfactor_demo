@@ -5,6 +5,7 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.util.FloatMath;
+import android.util.Log;
 
 public class ShakeDetector implements SensorEventListener {
 
@@ -15,7 +16,7 @@ public class ShakeDetector implements SensorEventListener {
      * from the Google Play Store and run it to see how
      *  many G's it takes to register a shake
      */
-    private static final float SHAKE_THRESHOLD_GRAVITY = 2.7F;
+    private static final float SHAKE_THRESHOLD_GRAVITY = 12;
     private static final int SHAKE_SLOP_TIME_MS = 500;
     private static final int SHAKE_COUNT_RESET_TIME_MS = 3000;
 
@@ -44,12 +45,14 @@ public class ShakeDetector implements SensorEventListener {
             float y = event.values[1];
             float z = event.values[2];
 
-            float gX = x / SensorManager.GRAVITY_EARTH;
-            float gY = y / SensorManager.GRAVITY_EARTH;
-            float gZ = z / SensorManager.GRAVITY_EARTH;
+            float gX = x ;
+            float gY = y ;
+            float gZ = z ;
 
             // gForce will be close to 1 when there is no movement.
             float gForce = FloatMath.sqrt(gX * gX + gY * gY + gZ * gZ);
+            Log.d("---", "gForce:" + gForce);
+
 
             if (gForce > SHAKE_THRESHOLD_GRAVITY) {
                 final long now = System.currentTimeMillis();
